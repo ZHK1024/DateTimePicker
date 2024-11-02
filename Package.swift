@@ -5,7 +5,7 @@ import PackageDescription
 let package = Package(
     name: "DateTimePicker",
     platforms: [
-        .iOS(.v10),
+        .iOS(.v14),
     ],
     products: [
         .library(
@@ -15,6 +15,10 @@ let package = Package(
     targets: [
         .target(
             name: "DateTimePicker",
-            path: "Source")
+            path: "Source",
+            resources: [
+                .process("Resources")
+            ]
+        )
     ]
 )
