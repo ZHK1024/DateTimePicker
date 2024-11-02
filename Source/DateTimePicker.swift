@@ -90,7 +90,7 @@ public protocol DateTimePickerDelegate: AnyObject {
     /// custom dark color, default to grey
     public var darkColor = UIColor(red: 0, green: 22.0/255.0, blue: 39.0/255.0, alpha: 1) {
         didSet {
-            dateTitleLabel.textColor = darkColor
+//            dateTitleLabel.textColor = darkColor
             cancelButton.setTitleColor(darkColor.withAlphaComponent(0.5), for: .normal)
             doneButton.backgroundColor = darkColor.withAlphaComponent(0.5)
             borderTopView.backgroundColor = darkColor.withAlphaComponent(0.2)
@@ -275,13 +275,15 @@ public protocol DateTimePickerDelegate: AnyObject {
     
     @IBOutlet private var contentView: UIView!
     @IBOutlet private var titleView: UIView!
-    @IBOutlet private var dateTitleLabel: UILabel!
+//    @IBOutlet private var dateTitleLabel: UILabel!
     @IBOutlet private var todayButton: UIButton!
     @IBOutlet private var doneButton: UIButton!
     @IBOutlet private var cancelButton: UIButton!
     @IBOutlet private var colonLabel1: UILabel!
     @IBOutlet private var colonLabel2: UILabel!
     
+    @IBOutlet private var monthButton: UIButton!
+    @IBOutlet private var yearButton: UIButton!
     @IBOutlet private var timeView: UIView!
     @IBOutlet private var borderTopView: UIView!
     @IBOutlet private var borderBottomView: UIView!
@@ -299,6 +301,13 @@ public protocol DateTimePickerDelegate: AnyObject {
     internal var minimumDate: Date!
     internal var maximumDate: Date!
     
+    /// 年份半径
+    internal var radius: Int = 5
+    /// 当前年份
+    internal var year: Int = 2024
+    /// 当前月份
+    internal var month: Int = 11
+    
     internal var dates: [Date]! = []
     internal var components: DateComponents! {
         didSet {
@@ -306,26 +315,77 @@ public protocol DateTimePickerDelegate: AnyObject {
         }
     }
     
-    @objc open class func create(minimumDate: Date? = nil, maximumDate: Date? = nil) -> DateTimePicker {
+    /// 更新当前可选日期范围
+    /// - Parameters:
+    ///   - year: 年份
+    ///   - month: 月份
+    private func updateDateRange(year: Int, month: Int) {
+        let startDate = Calendar.current.date(from: DateComponents(year: year, month: month, day: 1))
+        var endDate = Calendar.current.date(from: DateComponents(year: year, month: month + 1, day: 1))
+        endDate = endDate?.addingTimeInterval(-1)
+        
+        guard let startDate, let endDate else {
+            return
+        }
+        
+        let day = calendar.component(.day, from: selectedDate)
+        
+        let components = DateComponents(
+            year: calendar.component(.year, from: endDate),
+            month: calendar.component(.month, from: endDate),
+            day: min(day, calendar.component(.day, from: endDate)),
+            hour: calendar.component(.hour, from: selectedDate),
+            minute: calendar.component(.minute, from: selectedDate),
+            second: calendar.component(.second, from: selectedDate)
+        )
+        
+        guard let currentDate = calendar.date(from: components) else {
+            return
+        }
+        
+        minimumDate = startDate
+        maximumDate = endDate
+        selectedDate = currentDate
+        fillDates(fromDate: minimumDate, toDate: maximumDate)
+    }
+    
+    @objc open class func create(radius: Int = 5, minimumDate: Date? = nil, maximumDate: Date? = nil) -> DateTimePicker {
          
         guard let dateTimePicker = Bundle.resource.loadNibNamed("DateTimePicker", owner: nil, options: nil)?.first as? DateTimePicker else {
             fatalError("Error loading nib")
         }
-        dateTimePicker.minimumDate = minimumDate ?? Date(timeIntervalSinceNow: -3600 * 24 * 10)
-        dateTimePicker.maximumDate = maximumDate ?? Date(timeIntervalSinceNow: 3600 * 24 * 10)
+
+        if let minimumDate, let maximumDate {
+            dateTimePicker.minimumDate = minimumDate
+            dateTimePicker.maximumDate = maximumDate
+        } else {
+            dateTimePicker.updateDateRange(
+                year: dateTimePicker.calendar.component(.year, from: Date()),
+                month: dateTimePicker.calendar.component(.month, from: Date())
+            )
+        }
+        
+//        dateTimePicker.minimumDate = minimumDate ?? Date(timeIntervalSinceNow: -3600 * 24 * 10)
+//        dateTimePicker.maximumDate = maximumDate ?? Date(timeIntervalSinceNow: 3600 * 24 * 10)
         assert(dateTimePicker.minimumDate.compare(dateTimePicker.maximumDate) == .orderedAscending, "Minimum date should be earlier than maximum date")
         dateTimePicker.configureView()
         return dateTimePicker
     }
     
-    
     @objc open func show() {
         
 		if let window = UIApplication.shared.keyWindow {
+
+            /// 没有 `UIViewController` 的时候, 会导致无法显示 `UIMenu`
+            let viewController = UIViewController()
+
             let shadowView = UIView()
+            viewController.view = shadowView
             shadowView.backgroundColor = UIColor.black.withAlphaComponent(0.3)
             shadowView.alpha = 1
             window.addSubview(shadowView)
+            
+            
             
             shadowView.translatesAutoresizingMaskIntoConstraints = false
             shadowView.topAnchor.constraint(equalTo: window.topAnchor).isActive = true
@@ -333,7 +393,7 @@ public protocol DateTimePickerDelegate: AnyObject {
             shadowView.leadingAnchor.constraint(equalTo: window.leadingAnchor).isActive = true
             shadowView.trailingAnchor.constraint(equalTo: window.trailingAnchor).isActive = true
 			
-            window.addSubview(self)
+            shadowView.addSubview(self)
 			translatesAutoresizingMaskIntoConstraints = false
 			topAnchor.constraint(equalTo: window.topAnchor).isActive = true
             let contentViewBottomConstraint = bottomAnchor.constraint(equalTo: window.bottomAnchor, constant: contentHeight)
@@ -354,15 +414,20 @@ public protocol DateTimePickerDelegate: AnyObject {
                 contentViewBottomConstraint.constant = self.contentHeight
                 UIView.animate(withDuration: 0.5, delay: 0, usingSpringWithDamping: 1, initialSpringVelocity: 0.8, options: .curveLinear, animations: {
                     // animate to hide pickerView
-		    shadowView.alpha = 0
+                    shadowView.alpha = 0
                     self.layoutIfNeeded()
                 }, completion: { (completed) in
                     self.removeFromSuperview()
                     shadowView.removeFromSuperview()
-                    
+                    /// 引用一下 `viewController` , 防止被释放
+                    viewController.view = nil
                 })
             };
 		}
+    }
+    
+    deinit {
+        print(#function)
     }
     
     public override func didMoveToSuperview() {
@@ -386,7 +451,7 @@ public protocol DateTimePickerDelegate: AnyObject {
     private func configureView() {
         
         // content view
-        contentHeight = isDatePickerOnly ? 244 : isTimePickerOnly ? 230 : 330
+        contentHeight = isDatePickerOnly ? 244 : isTimePickerOnly ? 230 : 340
         
         contentView.layer.shadowColor = UIColor(white: 0, alpha: 0.3).cgColor
         contentView.layer.shadowOffset = CGSize(width: 0, height: -2.0)
@@ -399,10 +464,30 @@ public protocol DateTimePickerDelegate: AnyObject {
         // title view
         titleView.backgroundColor = titleBackgroundColor
         
-        dateTitleLabel.textColor = darkColor
-        dateTitleLabel.textAlignment = .center
-        dateTitleLabel.font = customFontSetting.selectedDateLabelFont
-        resetDateTitle()
+//        dateTitleLabel.textColor = darkColor
+//        dateTitleLabel.textAlignment = .center
+//        dateTitleLabel.font = customFontSetting.selectedDateLabelFont
+//        resetDateTitle()
+        
+        /// 样式只有在 iOS 15 以下才生效, 为了适配 iOS 15 的 style 属性的 tined 样式
+        /// iOS 15 以上的样式使用 xib 进行设置
+        if #available(iOS 15, *) {} else {
+            yearButton.backgroundColor = .systemBlue.withAlphaComponent(0.1)
+            yearButton.layer.cornerRadius = 6
+            yearButton.clipsToBounds = true
+            
+            monthButton.backgroundColor = .systemBlue.withAlphaComponent(0.1)
+            monthButton.layer.cornerRadius = 6
+            monthButton.clipsToBounds = true
+        }
+        
+        yearButton.showsMenuAsPrimaryAction = true
+        yearButton.setTitle("\(calendar.component(.year, from: Date()))", for: .normal)
+        loadYearActions()
+        
+        monthButton.showsMenuAsPrimaryAction = true
+        monthButton.setTitle("\(calendar.component(.month, from: Date()))", for: .normal)
+        loadMonthActions()
         
         let isRTL = UIApplication.shared.userInterfaceLayoutDirection == .rightToLeft
 
@@ -563,6 +648,7 @@ public protocol DateTimePickerDelegate: AnyObject {
         dismissHandler?()
     }
     
+    /// 重置时间
     func resetTime() {
         components = calendar.dateComponents([.day, .month, .year, .hour, .minute, .second], from: selectedDate)
         updateCollectionView(to: selectedDate)
@@ -602,6 +688,36 @@ public protocol DateTimePickerDelegate: AnyObject {
             secondTableView.selectRow(at: IndexPath(row: expectedRow, section: 0), animated: true, scrollPosition: .middle)
         }
     }
+    
+    /// 加载年份菜单列表
+    private func loadYearActions() {
+        let currentYear = calendar.component(.year, from: Date())
+        yearButton.menu = UIMenu(title: "", children: (currentYear - 10...currentYear + 10).map { year in
+            UIAction(title: "\(year) 年", handler: { [weak self] _ in
+                self?.year = year
+                self?.yearButton.setTitle("\(year)", for: .normal)
+                if let month = self?.month {
+                    self?.updateDateRange(year: year, month: month)
+                    self?.resetTime()
+                }
+            })
+        })
+    }
+    
+    /// 加载月份菜单列表
+    private func loadMonthActions() {
+        monthButton.menu = UIMenu(title: "", children: (1...12).map { month in
+            UIAction(title: "\(month) 月", handler: { [weak self] _ in
+                self?.month = month
+                self?.monthButton.setTitle("\(month)", for: .normal)
+                if let year = self?.year {
+                    self?.updateDateRange(year: year, month: month)
+                    self?.resetTime()
+                }
+            })
+        })
+    }
+
 }
 
 private extension DateTimePicker {
@@ -650,11 +766,11 @@ private extension DateTimePicker {
     }
     
     func resetDateTitle() {
-        guard dateTitleLabel != nil else {
-            return
-        }
-    
-        dateTitleLabel.text = selectedDateString
+//        guard dateTitleLabel != nil else {
+//            return
+//        }
+//    
+//        dateTitleLabel.text = selectedDateString
     }
     
     @objc
