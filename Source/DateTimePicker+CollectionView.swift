@@ -55,7 +55,9 @@ extension DateTimePicker: UICollectionViewDataSource, UICollectionViewDelegate {
     }
     
     public func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
-        alignScrollView(scrollView)
+        /// 只在停止滚动时调整位置
+        /// 以避免在滚动过程中调整位置导致的不良体验
+//        alignScrollView(scrollView)
     }
     
     public func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
