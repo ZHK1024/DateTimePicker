@@ -304,7 +304,7 @@ public protocol DateTimePickerDelegate: AnyObject {
     /// 年份半径
     internal var radius: Int = 5
     /// 当前年份
-    internal var year: Int = 2024
+    internal var year: Int = 2025
     /// 当前月份
     internal var month: Int = 11
     
@@ -364,6 +364,8 @@ public protocol DateTimePickerDelegate: AnyObject {
                 month: dateTimePicker.calendar.component(.month, from: Date())
             )
         }
+        
+        dateTimePicker.year = dateTimePicker.calendar.component(.year, from: Date())
         
 //        dateTimePicker.minimumDate = minimumDate ?? Date(timeIntervalSinceNow: -3600 * 24 * 10)
 //        dateTimePicker.maximumDate = maximumDate ?? Date(timeIntervalSinceNow: 3600 * 24 * 10)
